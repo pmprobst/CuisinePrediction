@@ -1,11 +1,10 @@
 # Multinomial Logistic Regression Model for Cuisine Prediction
-# Uses TF-IDF features with L2 regularization and cross-validation
+# Uses TF-IDF features with L1 regularization and faster cross-validation
 
 library(jsonlite)
 library(tidyverse)
 library(tidytext)
 library(glmnet)
-library(caret)
 
 
 # Load data
@@ -34,16 +33,13 @@ test_df <- test_data %>%
   mutate(text = map_chr(ingredients, ~paste(.x, collapse = " "))) %>%
   select(id, text)
 
-# Get vocabulary from training data
-train_words <- train_df %>%
-  unnest_tokens(word, text) %>%
-  distinct(word) %>%
-  pull(word)
+# Get vocabulary from training data (cheaper than re-tokenizing train_df)
+vocab <- train_tfidf$dimnames$Terms
 
 # Create test TF-IDF matrix
 test_tfidf <- test_df %>%
   unnest_tokens(word, text) %>%
-  filter(word %in% train_words) %>%
+  filter(word %in% vocab) %>%
   count(id, word) %>%
   cast_dtm(id, word, n)
 
@@ -72,55 +68,23 @@ if(length(missing_cols) > 0) {
 }
 test_matrix <- test_matrix[, colnames(train_matrix), drop = FALSE]
 
-# Cross-validation setup
 set.seed(42)
-cv_folds <- createFolds(train_labels, k = 5, returnTrain = FALSE)
 
-# Tune lambda parameter using cross-validation
-cat("Tuning lambda parameter...\n")
+# Tune lambda parameter using glmnet's built-in cross-validation
+cat("Tuning lambda parameter (fast CV)...\n")
 cv_glmnet <- cv.glmnet(
   x = train_matrix,
   y = train_labels,
   family = "multinomial",
   type.measure = "class",
-  nfolds = 5,
-  alpha = 1,  # Lasso regularization (can change to 0 for Ridge or 0.5 for Elastic Net)
+  nfolds = 3,  # fewer folds than before for speed
+  alpha = 1,   # Lasso regularization
   parallel = FALSE
 )
 
 best_lambda <- cv_glmnet$lambda.min
 cat("Best lambda:", best_lambda, "\n")
-
-# Perform cross-validation for model evaluation
-cv_results <- list()
-for(i in 1:length(cv_folds)) {
-  cat("CV Fold", i, "of", length(cv_folds), "\n")
-  
-  train_idx <- unlist(cv_folds[-i])
-  val_idx <- cv_folds[[i]]
-  
-  # Train model on fold
-  glmnet_model <- glmnet(
-    x = train_matrix[train_idx, ],
-    y = train_labels[train_idx],
-    family = "multinomial",
-    lambda = best_lambda,
-    alpha = 1
-  )
-  
-  # Predict on validation set
-  val_pred <- predict(glmnet_model, train_matrix[val_idx, ], type = "class")
-  val_pred <- factor(val_pred[, 1], levels = levels(train_labels))
-  val_accuracy <- mean(val_pred == train_labels[val_idx])
-  
-  cv_results[[i]] <- val_accuracy
-  cat("Fold", i, "Accuracy:", val_accuracy, "\n")
-}
-
-# Print CV results
-cat("\nCross-Validation Results:\n")
-cat("Mean CV Accuracy:", mean(unlist(cv_results)), "\n")
-cat("SD CV Accuracy:", sd(unlist(cv_results)), "\n")
+cat("Approx. CV misclassification error at best lambda:", min(cv_glmnet$cvm), "\n")
 
 # Train final model on all training data
 cat("\nTraining final model on all training data...\n")
