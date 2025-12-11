@@ -73,8 +73,8 @@ ingredient_scores_filtered <- ingredient_scores %>%
 cat("Total unique ingredients:", nrow(ingredient_scores), "\n")
 cat("After filtering rare/common:", nrow(ingredient_scores_filtered), "\n")
 
-# Select top ingredients by TF-IDF score (increased from 500 to 1000 for more features)
-top_n_ingredients <- 1000
+# Select top ingredients by TF-IDF score
+top_n_ingredients <- 500
 top_ingredients <- ingredient_scores_filtered %>%
   slice_head(n = top_n_ingredients) %>%
   pull(word)
@@ -227,8 +227,7 @@ set.seed(42)
 cat("\n=== MODEL TRAINING ===\n")
 
 # Try multiple alpha values (0 = Ridge, 0.5 = Elastic Net, 1 = Lasso)
-# We'll use elastic net (alpha = 0.5) as a balance
-alpha_values <- c(0.5, 0.7, 1.0)  # Try elastic net and lasso
+alpha_values <- c(0.5, 1.0)  # Try elastic net and lasso
 best_alpha <- NULL
 best_cv_error <- Inf
 best_cv_model <- NULL
@@ -237,13 +236,13 @@ cat("Tuning alpha parameter (elastic net vs lasso)...\n")
 for(alpha in alpha_values) {
   cat("\nTesting alpha =", alpha, "\n")
   
-  # Use stratified cross-validation with more folds for better estimates
+  # Use cross-validation with 3 folds for faster training
   cv_glmnet <- cv.glmnet(
     x = train_combined_matrix,
     y = train_labels,
     family = "multinomial",
     type.measure = "class",
-    nfolds = 5,              # More folds for better CV estimate
+    nfolds = 3,              # 3 folds for faster training
     alpha = alpha,           # Elastic net (0.5) or Lasso (1.0)
     parallel = FALSE,
     maxit = 100000,
