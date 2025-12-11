@@ -3,11 +3,21 @@
 # Based on best practices from Kaggle "What's Cooking" competition solutions
 
 library(jsonlite)
-library(tidyverse)
 library(tidytext)
 library(glmnet)
 library(caret)
 library(stringr)  # Explicitly load stringr for text processing
+
+my_tidyverse <- function() {
+  pkgs <- c(
+    "ggplot2", "dplyr", "tidyr", "readr",
+    "purrr", "tibble", "stringr", "forcats"
+  )
+  invisible(lapply(pkgs, library, character.only = TRUE))
+}
+
+my_tidyverse()
+
 
 # ============================================================================
 # 1. PREPROCESSING: Better ingredient normalization and cleaning
